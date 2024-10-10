@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require('axios');
+const cron = require('node-cron');
 
 const { PORT, COINGECKO_API_KEY } = require("./config/server_config");
 const connect = require("./config/db_config");
@@ -95,8 +96,48 @@ app.get('/stats', async (req, res) => {
     }
 });
 
+// Function to calculate standard deviation
+function calculateStandardDeviation(values) {
+    const mean = values.reduce((acc, curr) => acc + curr, 0) / values.length;
+    const variance = values.reduce((acc, curr) => acc + Math.pow(curr - mean, 2), 0) / values.length;
+    return Math.sqrt(variance);
+};
+
+app.get('/deviation', async (req, res) => {
+    const { coin } = req.query; 
+    if (!coin) {
+        return res.status(400).json({ error: 'Please specify a cryptocurrency using the "coin" query parameter.' });
+    }
+
+    try {
+        const records = await Crypto.find().sort({ fetchedAt: -1 }).limit(100).lean();
+
+        if (records.length === 0 || !records[0][coin]) {
+            return res.status(404).json({ error: `No data found for ${coin}` });
+        }
+    
+        const prices = records.map(record => record[coin].price);
+    
+        const stdDeviation = calculateStandardDeviation(prices);
+    
+        return res.json({ deviation: stdDeviation.toFixed(2) });
+
+    } catch (error) {
+        console.error('Error fetching data:', error.message);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Schedule the job to run every 2 hours
+async function scheduleCrons(){
+    cron.schedule('0 */2 * * *', () => {
+        console.log('Fetching crypto data...');
+        fetchCryptoData();
+    });
+}
+
 app.listen(PORT, async () => {
     console.log(`Server is up and running on PORT ${PORT}`);
     await connect();
-    fetchCryptoData();
+    await scheduleCrons();
 });
