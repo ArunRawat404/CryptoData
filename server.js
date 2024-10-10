@@ -73,6 +73,28 @@ async function saveCryptoData(cryptoData) {
     }
 };
 
+app.get('/stats', async (req, res) => {
+    const { coin } = req.query;
+    
+    if (!coin) {
+        return res.status(400).json({ error: 'Please provide a cryptocurrency using the "coin" query parameter.' });
+    }
+    
+    try {
+        const latestData = await Crypto.findOne().sort({ fetchedAt: -1 }).lean();
+        
+        if (!latestData || !latestData[coin]) {
+            return res.status(404).json({ error: `No data found for ${coin}` });
+        }
+    
+        return res.json(latestData[coin]);
+    
+    } catch (error) {
+        console.error('Error fetching data:', error.message);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 app.listen(PORT, async () => {
     console.log(`Server is up and running on PORT ${PORT}`);
     await connect();
